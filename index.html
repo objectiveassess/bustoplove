@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>시간 되감기 시계</title>
+<style>
+  body {
+    background-color: #fce4ec; /* 연한 분홍빛 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    gap: 80px;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+
+  canvas {
+    background-color: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    cursor: crosshair;
+  }
+</style>
+</head>
+<body>
+  <canvas id="clock1" width="300" height="300"></canvas>
+  <canvas id="clock2" width="300" height="300"></canvas>
+
+<script>
+function drawClock(ctx, angle, highlightColor="#fff") {
+  const cx = 150, cy = 150, radius = 140;
+  ctx.clearRect(0, 0, 300, 300);
+
+  // 시계 배경
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+
+  // 눈금 (12개)
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 12; i++) {
+    const theta = (i / 12) * 2 * Math.PI;
+    const x1 = cx + Math.sin(theta) * (radius - 10);
+    const y1 = cy - Math.cos(theta) * (radius - 10);
+    const x2 = cx + Math.sin(theta) * radius;
+    const y2 = cy - Math.cos(theta) * radius;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+
+  // 여러 겹 원 (팽이무늬)
+  for (let r = 20; r < radius; r += 12) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+
+  // 드래그된 부분 색칠
+  if (angle !== null) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, -Math.PI/2, angle - Math.PI/2);
+    ctx.closePath();
+    ctx.fillStyle = highlightColor;
+    ctx.fill();
+  }
+}
+
+function setupClock(canvasId) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext("2d");
+  let dragging = false;
+  let currentAngle = null;
+
+  drawClock(ctx, null);
+
+  canvas.addEventListener("mousedown", e => {
+    dragging = true;
+    updateAngle(e);
+  });
+
+  canvas.addEventListener("mousemove", e => {
+    if (dragging) updateAngle(e);
+  });
+
+  canvas.addEventListener("mouseup", () => {
+    dragging = false;
+    alert("📸 캡처해서 인스타그램 스토리에 업로드하세요!");
+  });
+
+  function updateAngle(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left - 150;
+    const y = e.clientY - rect.top - 150;
+    currentAngle = Math.atan2(x, -y);
+    drawClock(ctx, currentAngle, "#fff9c4"); // 연한 노랑
+  }
+}
+
+setupClock("clock1");
+setupClock("clock2");
+</script>
+</body>
+</html>
