@@ -1,109 +1,378 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>시간 되감기 시계</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>시간 되감기 시계 v2</title>
+<link rel="icon" href="data:,">
 <style>
-  body {
-    background-color: #fce4ec; /* 연한 분홍빛 */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    gap: 80px;
-    font-family: 'Noto Sans KR', sans-serif;
+  :root{
+    --bg: #fce4ec;       /* 연한 분홍 */
+    --clock-bg: #ffffff; /* 시계 배경 흰색 */
+    --tick: #000000;     /* 검정 눈금 */
+    --fill: #fff9c4;     /* 연한 노랑 (채워지는 색) */
+    --center-line: #1e3a5f; /* 중앙 파란선 */
   }
 
-  canvas {
-    background-color: #fff;
-    border-radius: 50%;
-    box-shadow: 0 0 10px rgba(0,0,0,0.2);
-    cursor: crosshair;
+  html,body{
+    height:100%;
+    margin:0;
+    font-family: 'Noto Sans KR', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    background: var(--bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .wrap{
+    width:100%;
+    max-width:920px;
+    padding:20px;
+    box-sizing:border-box;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:22px;
+  }
+
+  .clocks{
+    width:100%;
+    display:flex;
+    gap:40px;
+    align-items:center;
+    justify-content:center;
+    flex-wrap:wrap;
+  }
+
+  .clock-box{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+  }
+
+  canvas.clock {
+    width: 300px;
+    height: 300px;
+    max-width: 42vmin;
+    max-height: 42vmin;
+    background: var(--clock-bg);
+    border-radius:50%;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+    touch-action: none; /* pointer events handling */
+    -webkit-user-select:none;
+    user-select:none;
+  }
+
+  .label {
+    color:#333;
+    font-size:14px;
+  }
+
+  /* 캡처 버튼 (아이콘형, 하단 중앙) */
+  .controls{
+    width:100%;
+    display:flex;
+    justify-content:center;
+    margin-top:6px;
+  }
+
+  button.capture {
+    width:66px;
+    height:66px;
+    border-radius:50%;
+    border:none;
+    background:var(--fill);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+    cursor:pointer;
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  button.capture:active{ transform: scale(.98); box-shadow:0 4px 10px rgba(0,0,0,0.14); }
+  button.capture svg{ width:28px; height:28px; }
+
+  /* 토스트 / 팝업 */
+  .toast{
+    position: fixed;
+    left:50%;
+    transform: translateX(-50%);
+    bottom:26px;
+    background: rgba(0,0,0,0.82);
+    color: #fff;
+    padding:12px 16px;
+    border-radius:12px;
+    font-size:14px;
+    display:none;
+    z-index:9999;
+  }
+
+  /* small hint on top */
+  .hint{
+    color:#444;
+    font-size:13px;
+  }
+
+  @media (max-width:560px){
+    .clocks{ gap:18px; }
+    .hint{ font-size:12px; }
   }
 </style>
 </head>
 <body>
-  <canvas id="clock1" width="300" height="300"></canvas>
-  <canvas id="clock2" width="300" height="300"></canvas>
+  <div class="wrap">
+    <div class="hint">왼쪽 시계를 손가락(또는 마우스)으로 원을 따라 돌려서 감정을 표현하세요. 오른쪽은 상대(잠김).</div>
 
-<script>
-function drawClock(ctx, angle, highlightColor="#fff") {
-  const cx = 150, cy = 150, radius = 140;
-  ctx.clearRect(0, 0, 300, 300);
+    <div class="clocks" id="capture-area">
+      <div class="clock-box">
+        <canvas id="leftClock" class="clock" width="600" height="600" aria-label="내 감정 시계"></canvas>
+        <div class="label">내 시계 (조작 가능)</div>
+      </div>
 
-  // 시계 배경
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-  ctx.fillStyle = "#fff";
-  ctx.fill();
+      <div class="clock-box">
+        <canvas id="rightClock" class="clock" width="600" height="600" aria-label="상대 시계"></canvas>
+        <div class="label">상대 시계 (잠김)</div>
+      </div>
+    </div>
 
-  // 눈금 (12개)
-  ctx.strokeStyle = "#000";
-  ctx.lineWidth = 2;
-  for (let i = 0; i < 12; i++) {
-    const theta = (i / 12) * 2 * Math.PI;
-    const x1 = cx + Math.sin(theta) * (radius - 10);
-    const y1 = cy - Math.cos(theta) * (radius - 10);
-    const x2 = cx + Math.sin(theta) * radius;
-    const y2 = cy - Math.cos(theta) * radius;
+    <div class="controls">
+      <button class="capture" id="captureBtn" title="캡처 후 저장 (스토리에 업로드)">
+        <!-- camera SVG icon -->
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 7h3l2-2h6l2 2h3v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" stroke="#333" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="12" cy="13" r="3" stroke="#333" stroke-width="1.2"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- html2canvas for capture -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script>
+/* ---------- 유틸 ---------- */
+function showToast(text, ms=2800){
+  const t = document.getElementById('toast');
+  t.textContent = text;
+  t.style.display = 'block';
+  t.style.opacity = '1';
+  clearTimeout(t._hid);
+  t._hid = setTimeout(()=>{ t.style.display='none'; }, ms);
+}
+
+/* ---------- 캔버스 시계 그리기 ---------- */
+function makeClock(canvas, options={}) {
+  const ctx = canvas.getContext('2d');
+  const DPR = Math.max(1, window.devicePixelRatio || 1);
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  const center = { x: W/2, y: H/2 };
+  const radius = Math.min(W,H) * 0.46; // 약간 여유
+  const ringsGap = 12;
+
+  function clear(){
+    ctx.clearRect(0,0,W,H);
+  }
+
+  function drawBase(){
+    // 배경 원
     ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
+    ctx.arc(center.x, center.y, radius, 0, Math.PI*2);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--clock-bg') || '#fff';
+    ctx.fill();
+
+    // 여러 겹의 얇은 원 (팽이무늬)
+    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.lineWidth = 1;
+    for(let r = 20; r <= radius - 6; r += ringsGap){
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, r, 0, Math.PI*2);
+      ctx.stroke();
+    }
+
+    // 시계 눈금 12개
+    ctx.lineWidth = 2;
+    for(let i=0;i<12;i++){
+      const ang = (i * 30 - 90) * Math.PI/180;
+      const x1 = center.x + Math.cos(ang) * (radius - 10);
+      const y1 = center.y + Math.sin(ang) * (radius - 10);
+      const x2 = center.x + Math.cos(ang) * (radius);
+      const y2 = center.y + Math.sin(ang) * (radius);
+      ctx.beginPath();
+      ctx.moveTo(x1,y1);
+      ctx.lineTo(x2,y2);
+      ctx.stroke();
+    }
+
+    // 중앙 파란선 (12시 방향)
+    ctx.beginPath();
+    ctx.moveTo(center.x, center.y);
+    ctx.lineTo(center.x, center.y - radius);
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--center-line') || '#1e3a5f';
+    ctx.lineWidth = 3;
     ctx.stroke();
   }
 
-  // 여러 겹 원 (팽이무늬)
-  for (let r = 20; r < radius; r += 12) {
+  function drawFill(angleDeg){
+    if(!angleDeg || angleDeg <= 0) return;
+    // arc from -90deg to -90 + angleDeg
+    const start = -Math.PI/2;
+    const end = start + angleDeg * Math.PI/180;
     ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-    ctx.stroke();
-  }
-
-  // 드래그된 부분 색칠
-  if (angle !== null) {
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, radius, -Math.PI/2, angle - Math.PI/2);
+    ctx.moveTo(center.x, center.y);
+    ctx.arc(center.x, center.y, radius, start, end, false);
     ctx.closePath();
-    ctx.fillStyle = highlightColor;
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--fill') || '#fff9c4';
     ctx.fill();
   }
-}
 
-function setupClock(canvasId) {
-  const canvas = document.getElementById(canvasId);
-  const ctx = canvas.getContext("2d");
-  let dragging = false;
-  let currentAngle = null;
-
-  drawClock(ctx, null);
-
-  canvas.addEventListener("mousedown", e => {
-    dragging = true;
-    updateAngle(e);
-  });
-
-  canvas.addEventListener("mousemove", e => {
-    if (dragging) updateAngle(e);
-  });
-
-  canvas.addEventListener("mouseup", () => {
-    dragging = false;
-    alert("📸 캡처해서 인스타그램 스토리에 업로드하세요!");
-  });
-
-  function updateAngle(e) {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left - 150;
-    const y = e.clientY - rect.top - 150;
-    currentAngle = Math.atan2(x, -y);
-    drawClock(ctx, currentAngle, "#fff9c4"); // 연한 노랑
+  function render(angleDeg){
+    clear();
+    drawBase();
+    drawFill(angleDeg);
+    // redraw center dot if desired (not necessary)
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, 6, 0, Math.PI*2);
+    ctx.fillStyle = '#111';
+    ctx.fill();
   }
+
+  // expose functions
+  return {
+    render,
+    center,
+    radius
+  };
 }
 
-setupClock("clock1");
-setupClock("clock2");
-</script>
+/* ---------- 상호작용: 원형 회전 (PC/터치 통합 pointer 이벤트) ---------- */
+(function init(){
+  const leftCanvas = document.getElementById('leftClock');
+  const rightCanvas = document.getElementById('rightClock');
+
+  const leftClock = makeClock(leftCanvas);
+  const rightClock = makeClock(rightCanvas);
+
+  // 초기 렌더 (둘 다 비어있는 기본 상태)
+  leftClock.render(0);
+  rightClock.render(0); // 오른쪽은 잠김 상태(비어 있음)
+
+  // 상태
+  let dragging = false;
+  let activeCanvas = null;
+  let lastAngle = 0;
+
+  function getAngleFromEvent(e, canvas, clock){
+    const rect = canvas.getBoundingClientRect();
+    const clientX = (e.clientX !== undefined) ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX);
+    const clientY = (e.clientY !== undefined) ? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY);
+    if(clientX === undefined || clientY === undefined) return null;
+    const cx = rect.left + rect.width/2;
+    const cy = rect.top + rect.height/2;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+    // atan2(y, x) but we want 0 at top (12시) and increasing clockwise
+    let theta = Math.atan2(dy, dx) * 180 / Math.PI; // -180 ~ 180, 0 at +x
+    theta = theta + 90; // shift so 0 at -y (12시)
+    if(theta < 0) theta += 360;
+    return theta; // degrees [0,360)
+  }
+
+  /* ---------- left canvas pointer handlers ---------- */
+  function onPointerDownLeft(e){
+    e.preventDefault();
+    dragging = true;
+    activeCanvas = leftCanvas;
+    leftCanvas.setPointerCapture && leftCanvas.setPointerCapture(e.pointerId);
+    const angle = getAngleFromEvent(e, leftCanvas);
+    if(angle !== null){
+      lastAngle = angle;
+      leftClock.render(angle);
+    }
+  }
+
+  function onPointerMoveLeft(e){
+    if(!dragging || activeCanvas !== leftCanvas) return;
+    e.preventDefault();
+    const angle = getAngleFromEvent(e, leftCanvas);
+    if(angle !== null){
+      lastAngle = angle;
+      leftClock.render(angle);
+    }
+  }
+
+  function onPointerUpLeft(e){
+    if(activeCanvas === leftCanvas){
+      // release
+      dragging = false;
+      activeCanvas = null;
+      // 간단한 안내
+      showToast('설정 완료! 캡처 버튼으로 저장하세요. 📸', 1800);
+    }
+  }
+
+  /* ---------- right canvas handlers (잠김) ---------- */
+  function onPointerDownRight(e){
+    e.preventDefault();
+    // 바로 안내 팝업 띄우기
+    showToast('상대방의 감정은 본인이 건드릴 수 없습니다.', 2400);
+  }
+
+  /* ---------- attach pointer events (pointer API try) ---------- */
+  // left
+  leftCanvas.addEventListener('pointerdown', onPointerDownLeft, {passive:false});
+  window.addEventListener('pointermove', onPointerMoveLeft, {passive:false});
+  window.addEventListener('pointerup', onPointerUpLeft, {passive:false});
+
+  // right (blocked)
+  rightCanvas.addEventListener('pointerdown', onPointerDownRight, {passive:false});
+  // prevent accidental dragging on right for touchmove
+  rightCanvas.addEventListener('touchstart', function(e){ e.preventDefault(); showToast('상대방의 감정은 본인이 건드릴 수 없습니다.', 2400); }, {passive:false});
+
+  /* ---------- capture 버튼 동작 (html2canvas 사용) ---------- */
+  const captureBtn = document.getElementById('captureBtn');
+  captureBtn.addEventListener('click', async ()=>{
+    captureBtn.disabled = true;
+    captureBtn.style.opacity = '0.8';
+    try{
+      const area = document.getElementById('capture-area');
+      const canvas = await html2canvas(area, {
+        backgroundColor: null,
+        scale: Math.min(2, window.devicePixelRatio || 1.5)
+      });
+      // 다운로드
+      const link = document.createElement('a');
+      link.download = `time_of_us_${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('저장되었습니다! 이제 스토리에 업로드하세요. 🙌', 2200);
+    } catch(err){
+      console.error(err);
+      showToast('저장에 실패했습니다. 새로고침 후 다시 시도하세요.', 3200);
+    } finally{
+      captureBtn.disabled = false;
+      captureBtn.style.opacity = '1';
+    }
+  });
+
+  /* ---------- 터치에서 pointer 이벤트 미지원 브라우저 대비 (fallback) ---------- */
+  // pointer events가 없을 경우 touch 이벤트로 보완 (대부분 모바일은 pointer 지원하지만 안전장치)
+  if(!window.PointerEvent){
+    leftCanvas.addEventListener('touchstart', function(e){ onPointerDownLeft(e.touches[0]); }, {passive:false});
+    leftCanvas.addEventListener('touchmove', function(e){ onPointerMoveLeft(e.touches[0]); }, {passive:false});
+    leftCanvas.addEventListener('touchend', function(e){ onPointerUpLeft(e.changedTouches[0]); }, {passive:false});
+    rightCanvas.addEventListener('touchstart', function(e){ onPointerDownRight(e.touches[0]); }, {passive:false});
+  }
+
+  /* ---------- resize 처리: 캔버스 CSS와 내부 해상도는 고정으로 뒀음 (responsive via CSS max-width) ---------- */
+  // Render continuously to reflect devicePixelRatio properly would be more complex.
+})();
+  </script>
 </body>
 </html>
